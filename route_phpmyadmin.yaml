@@ -1,0 +1,9 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: phpmyadmin
+  namespace: wordpress
+spec:
+  to: { kind: Service, name: phpmyadmin }
+  port: { targetPort: http }
+  tls: { termination: edge }
