@@ -1,0 +1,48 @@
+# =========================
+# MariaDB (Deployment + SVC)
+# =========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: wordpress
+  labels: { app: mariadb, tier: database }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mariadb, tier: database }
+  template:
+    metadata:
+      labels: { app: mariadb, tier: database }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh","-c","chmod -R g+rwX /var/lib/mysql || true"]
+          volumeMounts:
+            - name: mariadb-storage
+              mountPath: /var/lib/mysql
+      containers:
+        - name: mariadb
+          image: mariadb:latest           # use :10.6 if needed
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-root-password } }
+            - name: MYSQL_DATABASE
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-database } }
+            - name: MYSQL_USER
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-user } }
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-password } }
+          volumeMounts:
+            - name: mariadb-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mariadb-storage
+          persistentVolumeClaim:
+            claimName: mariadb-pvc
