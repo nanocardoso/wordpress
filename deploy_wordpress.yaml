@@ -1,0 +1,65 @@
+# =========================
+# WordPress (Deployment + SVC)
+# =========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: wordpress
+  labels: { app: wordpress, tier: frontend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: wordpress, tier: frontend }
+  template:
+    metadata:
+      labels: { app: wordpress, tier: frontend }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh","-c","chmod -R g+rwX /var/www/html || true"]
+          volumeMounts:
+            - name: wp-content
+              mountPath: /var/www/html
+      containers:
+        - name: wordpress
+          image: wordpress:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { containerPort: 8080, name: http }
+          env:
+            - { name: WORDPRESS_DB_HOST, value: mariadb }
+            - name: WORDPRESS_DB_USER
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-user } }
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-password } }
+            - name: WORDPRESS_DB_NAME
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-database } }
+          volumeMounts:
+            - name: apache-ports
+              mountPath: /etc/apache2/ports.conf
+              subPath: ports.conf
+              readOnly: true
+            - name: apache-site
+              mountPath: /etc/apache2/sites-available/000-default.conf
+              subPath: 000-default.conf
+              readOnly: true
+            - name: wp-content
+              mountPath: /var/www/html
+      volumes:
+        - name: apache-ports
+          configMap:
+            name: wordpress-apache-config
+            items:
+              - { key: ports.conf, path: ports.conf }
+        - name: apache-site
+          configMap:
+            name: wordpress-apache-config
+            items:
+              - { key: 000-default.conf, path: 000-default.conf }
+        - name: wp-content
+          persistentVolumeClaim:
+            claimName: wordpress-pvc
