@@ -1,0 +1,71 @@
+# =========================
+# phpMyAdmin (Deployment + SVC + Route)
+# =========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phpmyadmin
+  namespace: wordpress
+  labels: { app: phpmyadmin }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: phpmyadmin }
+  template:
+    metadata:
+      labels: { app: phpmyadmin }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      # Copy /etc/phpmyadmin from base container to an emptyDir writable
+      initContainers:
+        - name: prepare-phpmyadmin-etc
+          image: phpmyadmin:latest
+          command: ["/bin/sh","-c"]
+          args:
+            - |
+              set -e
+              mkdir -p /work
+              if [ -d /etc/phpmyadmin ]; then
+                cp -a /etc/phpmyadmin/* /work/ 2>/dev/null || true
+              fi
+              chmod -R g+rwX /work || true
+          volumeMounts:
+            - name: etc-phpmyadmin
+              mountPath: /work
+      containers:
+        - name: phpmyadmin
+          image: phpmyadmin:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { containerPort: 8080, name: http }
+          env:
+            - { name: PMA_HOST, value: mariadb }
+            - name: PMA_USER
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-user } }
+            - name: PMA_PASSWORD
+              valueFrom: { secretKeyRef: { name: wordpress-db-secret, key: mariadb-password } }
+          volumeMounts:
+            - name: apache-ports
+              mountPath: /etc/apache2/ports.conf
+              subPath: ports.conf
+              readOnly: true
+            - name: apache-site
+              mountPath: /etc/apache2/sites-available/000-default.conf
+              subPath: 000-default.conf
+              readOnly: true
+            - name: etc-phpmyadmin
+              mountPath: /etc/phpmyadmin
+      volumes:
+        - name: apache-ports
+          configMap:
+            name: phpmyadmin-apache-config
+            items:
+              - { key: ports.conf, path: ports.conf }
+        - name: apache-site
+          configMap:
+            name: phpmyadmin-apache-config
+            items:
+              - { key: 000-default.conf, path: 000-default.conf }
+        - name: etc-phpmyadmin
+          emptyDir: {}
