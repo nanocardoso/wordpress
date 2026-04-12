@@ -1,0 +1,20 @@
+# =======================================
+# ConfigMap Apache (WordPress) -> 8080
+# =======================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wordpress-apache-config
+  namespace: wordpress
+data:
+  ports.conf: |
+    Listen 8080
+  000-default.conf: |
+    <VirtualHost *:8080>
+      DocumentRoot /var/www/html
+      <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+      </Directory>
+    </VirtualHost>
